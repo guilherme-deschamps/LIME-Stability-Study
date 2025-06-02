@@ -1,0 +1,125 @@
+------------------------ APPROACH 1: HAVING SETS X AND Y ------------------------
+
+x_train = []
+
+for folder in os.listdir(train_path):
+    sub_path = train_path + "/" + folder
+
+    print('Reading images from sub-path {}'.format(sub_path))
+    for img in os.listdir(sub_path):
+        image_path = sub_path + "/" + img
+        img_arr = cv2.imread(image_path)
+        x_train.append(img_arr)
+    print('Finished reading {}'.format(folder))
+
+x_test = []
+
+for folder in os.listdir(test_path):
+    sub_path = test_path + "/" + folder
+
+    print('Reading images from sub-path {}'.format(sub_path))
+    for img in os.listdir(sub_path):
+        image_path = sub_path + "/" + img
+        img_arr = cv2.imread(image_path)
+        x_test.append(img_arr)
+    print('Finished reading {}'.format(folder))
+
+x_val = []
+
+for folder in os.listdir(val_path):
+    sub_path = val_path + "/" + folder
+
+    print('Reading images from sub-path {}'.format(sub_path))
+    for img in os.listdir(sub_path):
+        image_path = sub_path + "/" + img
+        img_arr = cv2.imread(image_path)
+        x_val.append(img_arr)
+    print('Finished reading {}'.format(folder))
+
+# Creating numpy array for images
+print('Creating numpy arrays for images')
+train_x = np.array(x_train)
+test_x = np.array(x_test)
+val_x = np.array(x_val)
+
+
+##### All sets divided by 255.0 for normalization (OPTIONAL)
+# train_x = train_x/255
+# test_x = test_x/255
+# val_x = val_x/255
+
+# Defining classes (y) for training
+train_y = training_set.classes
+test_y = test_set.classes
+val_y = val_set.classes
+
+
+------------------------ APPROACH 2: CREATE DATA GENERATORS FROM SETS X AND Y ------------------------
+# Create generators to force TensorFlow to run batches one by one
+class DataGenerator(Sequence):
+    def __init__(self, x_set, y_set, batch_size):
+        self.x, self.y = x_set, y_set
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return int(np.ceil(len(self.x) / float(self.batch_size)))
+
+    def __getitem__(self, idx):
+        batch_x = self.x[idx * self.batch_size:(idx + 1) * self.batch_size]
+        batch_y = self.y[idx * self.batch_size:(idx + 1) * self.batch_size]
+        return batch_x, batch_y
+
+
+print('Creating data generators')
+train_gen = DataGenerator(train_x, train_y, 32)
+print('Finished creating train data generator')
+val_gen = DataGenerator(val_x, val_y, 32)
+print('Finished creating validation data generator')
+
+
+------------------------ APPROACH 3: CREATE DATA GENERATORS DIRECTLY FROM DIRECTORIES ------------------------
+# Create data generators
+print('Creating ImageDataGenerators')
+train_datagen = ImageDataGenerator()
+test_datagen = ImageDataGenerator()
+val_datagen = ImageDataGenerator()
+
+training_set = train_datagen.flow_from_directory(train_path,
+                                                 target_size=(1200, 800),
+                                                 batch_size=32,
+                                                 class_mode='sparse')
+test_set = test_datagen.flow_from_directory(test_path,
+                                            target_size=(1200, 800),
+                                            batch_size=32,
+                                            class_mode='sparse')
+val_set = val_datagen.flow_from_directory(val_path,
+                                          target_size=(1200, 800),
+                                          batch_size=32,
+                                          class_mode='sparse')
+
+
+------------------------ CODE FOR THE ACTUAL TRAINING ------------------------
+# Create a callback that saves the model's weights to file
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=CHECKPOINT_PATH,
+                                                 save_weights_only=True,
+                                                 verbose=1)
+
+# Train model
+# steps_per_epoch = how many steps (iterations) define an epoch. Equals to size of dataset / batch size
+print('Starting training model')
+history = model.fit(
+    training_set,
+    steps_per_epoch=1818 // BATCH_SIZE,
+    validation_data=val_set,
+    validation_steps=459 // BATCH_SIZE,
+    epochs=10,
+    callbacks=[cp_callback])
+print('Model finished training')
+
+----------------------------------------------------------
+
+print("Test Accuracy : {}".format(accuracy_score(val_set.classes, Y_test_preds)))
+print("\nConfusion Matrix : ")
+print(confusion_matrix(val_set.classes, Y_test_preds))
+print("\nClassification Report :")
+print(classification_report(val_set.classes, Y_test_preds, target_names=val_set.class_indices))
